@@ -1,132 +1,299 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { VideoMetadata, searchVideos, refineSearch, mockVideoDatabase } from '@/data/mockDatabase';
+// src/context/SearchContext.tsx
+import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
+import { apiService, QueryRequest, QueryResult, HistoryItem } from '@/services/api';
 
-type QueryType = 'text' | 'video' | 'image';
-
-interface SearchStep {
-    id: number;
-    label: string;
-    query: string;
-    queryType: QueryType;
-    resultsCount: number;
-    completed: boolean;
+// Convert QueryResult to VideoMetadata for compatibility with existing components
+export interface VideoMetadata {
+  id: string;
+  video_id: string;
+  title: string;
+  thumbnail: string;
+  duration: number;
+  timestamp_ms: number;
+  frame_number: number;
+  description?: string;
+  tags?: string[];
+  metadata: Record<string, any>;
+  score?: number;
+  rank?: number;
 }
 
-interface SearchContextValue {
-    searchResults: VideoMetadata[];
-    searchHistory: SearchStep[];
-    currentStep: number;
-    isLoading: boolean;
-    hasSearched: boolean;
-    handleSearch: (query: string, queryType: QueryType, file?: File) => Promise<void>;
-    handleRefine: (refinementQuery: string, queryType: QueryType) => Promise<void>;
-    handleVideoSelect: (video: VideoMetadata) => void;
-    resetSearch: () => void;
-    findVideoById: (id: string) => VideoMetadata | undefined;
+export interface SearchHistoryItem {
+  id: string;
+  query: string;
+  timestamp: Date;
+  resultsCount: number;
+  queryType: 'text' | 'image' | 'multimodal';
 }
 
-const SearchContext = createContext<SearchContextValue | undefined>(undefined);
-
-export function SearchProvider({ children }: { children: React.ReactNode }) {
-    const [searchResults, setSearchResults] = useState<VideoMetadata[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
-    const [searchHistory, setSearchHistory] = useState<SearchStep[]>([]);
-    const [currentStep, setCurrentStep] = useState(0);
-
-    const handleSearch = useCallback(async (query: string, queryType: QueryType, file?: File) => {
-        setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const results = searchVideos(query, queryType);
-        setSearchResults(prev => {
-            if (prev.length === 0) return results;
-            const map = new Map(prev.map(v => [v.id, v]));
-            for (const v of results) map.set(v.id, v);
-            return Array.from(map.values());
-        });
-        setHasSearched(true);
-        setIsLoading(false);
-        const newStep: SearchStep = {
-            id: Date.now(),
-            label: `Initial Search - ${queryType}`,
-            query,
-            queryType,
-            resultsCount: results.length,
-            completed: true
-        };
-        setSearchHistory(prev => [...prev, newStep]);
-        setCurrentStep(prev => prev + 1);
-    }, []);
-
-    const handleRefine = useCallback(async (refinementQuery: string, queryType: QueryType) => {
-        setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 400));
-        const refinedResults = refineSearch(searchResults, refinementQuery, queryType);
-        setSearchResults(refinedResults);
-        setIsLoading(false);
-        const newStep: SearchStep = {
-            id: Date.now(),
-            label: `Refinement ${searchHistory.length}`,
-            query: refinementQuery,
-            queryType,
-            resultsCount: refinedResults.length,
-            completed: true
-        };
-        setSearchHistory(prev => [...prev, newStep]);
-        setCurrentStep(prev => prev + 1);
-    }, [searchResults, searchHistory.length]);
-
-    const handleVideoSelect = useCallback((video: VideoMetadata) => {
-        setSearchResults([video]);
-        const refinementStep: SearchStep = {
-            id: Date.now(),
-            label: 'Final Selection',
-            query: video.title,
-            queryType: 'text',
-            resultsCount: 1,
-            completed: true
-        };
-        setSearchHistory(prev => [...prev, refinementStep]);
-        setCurrentStep(prev => prev + 1);
-    }, []);
-
-    const resetSearch = useCallback(() => {
-        setSearchResults([]);
-        setHasSearched(false);
-        setSearchHistory([]);
-        setCurrentStep(0);
-    }, []);
-
-    const findVideoById = useCallback((id: string) => {
-        return mockVideoDatabase.find(v => v.id === id);
-    }, []);
-
-    const value = useMemo<SearchContextValue>(() => ({
-        searchResults,
-        searchHistory,
-        currentStep,
-        isLoading,
-        hasSearched,
-        handleSearch,
-        handleRefine,
-        handleVideoSelect,
-        resetSearch,
-        findVideoById
-    }), [searchResults, searchHistory, currentStep, isLoading, hasSearched, handleSearch, handleRefine, handleVideoSelect, resetSearch, findVideoById]);
-
-    return (
-        <SearchContext.Provider value={value}>
-            {children}
-        </SearchContext.Provider>
-    );
+interface SearchState {
+  sessionId: string | null;
+  searchResults: VideoMetadata[];
+  searchHistory: SearchHistoryItem[];
+  currentStep: number;
+  isLoading: boolean;
+  hasSearched: boolean;
+  error: string | null;
+  queryHistory: HistoryItem[];
 }
 
-export function useSearchContext(): SearchContextValue {
-    const ctx = useContext(SearchContext);
-    if (!ctx) {
-        throw new Error('useSearchContext must be used within a SearchProvider');
+type SearchAction =
+  | { type: 'SET_SESSION'; payload: string }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_RESULTS'; payload: VideoMetadata[] }
+  | { type: 'ADD_SEARCH_HISTORY'; payload: SearchHistoryItem }
+  | { type: 'SET_CURRENT_STEP'; payload: number }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_QUERY_HISTORY'; payload: HistoryItem[] }
+  | { type: 'RESET_SEARCH' };
+
+const initialState: SearchState = {
+  sessionId: null,
+  searchResults: [],
+  searchHistory: [],
+  currentStep: 0,
+  isLoading: false,
+  hasSearched: false,
+  error: null,
+  queryHistory: [],
+};
+
+function searchReducer(state: SearchState, action: SearchAction): SearchState {
+  switch (action.type) {
+    case 'SET_SESSION':
+      return { ...state, sessionId: action.payload };
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+    case 'SET_RESULTS':
+      return { 
+        ...state, 
+        searchResults: action.payload, 
+        hasSearched: true,
+        error: null 
+      };
+    case 'ADD_SEARCH_HISTORY':
+      return {
+        ...state,
+        searchHistory: [...state.searchHistory, action.payload],
+        currentStep: state.searchHistory.length + 1,
+      };
+    case 'SET_CURRENT_STEP':
+      return { ...state, currentStep: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload, isLoading: false };
+    case 'SET_QUERY_HISTORY':
+      return { ...state, queryHistory: action.payload };
+    case 'RESET_SEARCH':
+      return { 
+        ...initialState, 
+        sessionId: state.sessionId // Keep session but reset search state
+      };
+    default:
+      return state;
+  }
+}
+
+// Helper function to convert QueryResult to VideoMetadata
+function convertQueryResultToVideoMetadata(result: QueryResult): VideoMetadata {
+  const title = result.metadata?.title || `Video ${result.video_id}`;
+  const description = result.metadata?.description || '';
+  const tags = result.metadata?.tags || [];
+  
+  return {
+    id: result.keyframe_id,
+    video_id: result.video_id,
+    title,
+    thumbnail: result.image_url,
+    duration: result.metadata?.duration || 0,
+    timestamp_ms: result.timestamp_ms,
+    frame_number: result.frame_number,
+    description,
+    tags,
+    metadata: result.metadata,
+    score: result.score,
+    rank: result.rank,
+  };
+}
+
+interface SearchContextType {
+  // State
+  sessionId: string | null;
+  searchResults: VideoMetadata[];
+  searchHistory: SearchHistoryItem[];
+  queryHistory: HistoryItem[];
+  currentStep: number;
+  isLoading: boolean;
+  hasSearched: boolean;
+  error: string | null;
+
+  // Actions
+  handleSearch: (query: QueryRequest) => Promise<void>;
+  handleRefine: (refinement: string) => Promise<void>;
+  handleVideoSelect: (video: VideoMetadata) => void;
+  resetSearch: () => void;
+  findVideoById: (id: string) => VideoMetadata | undefined;
+  loadHistory: () => Promise<void>;
+  createNewSession: () => Promise<void>;
+}
+
+const SearchContext = createContext<SearchContextType | undefined>(undefined);
+
+export function SearchProvider({ children }: { children: ReactNode }) {
+  const [state, dispatch] = useReducer(searchReducer, initialState);
+
+  // Initialize session on mount
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        // Check for existing session in localStorage
+        const existingSessionId = localStorage.getItem('searchSessionId');
+        if (existingSessionId) {
+          dispatch({ type: 'SET_SESSION', payload: existingSessionId });
+          await loadHistoryForSession(existingSessionId);
+        } else {
+          await createNewSession();
+        }
+      } catch (error) {
+        console.error('Failed to initialize session:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to initialize session' });
+      }
+    };
+
+    initSession();
+  }, []);
+
+  const createNewSession = useCallback(async () => {
+    try {
+      const session = await apiService.createSession();
+      dispatch({ type: 'SET_SESSION', payload: session.session_id });
+      localStorage.setItem('searchSessionId', session.session_id);
+      dispatch({ type: 'RESET_SEARCH' });
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to create new session' });
     }
-    return ctx;
+  }, []);
+
+  const loadHistoryForSession = useCallback(async (sessionId: string) => {
+    try {
+      const history = await apiService.getHistory(sessionId);
+      dispatch({ type: 'SET_QUERY_HISTORY', payload: history.queries });
+      
+      // Convert query history to search history format
+      const searchHistory: SearchHistoryItem[] = history.queries.map((query, index) => ({
+        id: query.query_id,
+        query: query.text_query || query.image_query || 'Multimodal query',
+        timestamp: new Date(query.query_time),
+        resultsCount: query.results.length,
+        queryType: query.text_query ? 'text' : query.image_query ? 'image' : 'multimodal',
+      }));
+
+      searchHistory.forEach(item => {
+        dispatch({ type: 'ADD_SEARCH_HISTORY', payload: item });
+      });
+
+      // Set results from last query if exists
+      if (history.queries.length > 0) {
+        const lastQuery = history.queries[history.queries.length - 1];
+        const results = lastQuery.results.map(convertQueryResultToVideoMetadata);
+        dispatch({ type: 'SET_RESULTS', payload: results });
+      }
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    }
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    if (!state.sessionId) return;
+    await loadHistoryForSession(state.sessionId);
+  }, [state.sessionId, loadHistoryForSession]);
+
+  const handleSearch = useCallback(async (queryRequest: QueryRequest) => {
+    if (!state.sessionId) {
+      dispatch({ type: 'SET_ERROR', payload: 'No active session' });
+      return;
+    }
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+
+    try {
+      const response = await apiService.createQuery(state.sessionId, queryRequest);
+      const results = response.results.map(convertQueryResultToVideoMetadata);
+      
+      dispatch({ type: 'SET_RESULTS', payload: results });
+
+      // Add to search history
+      const queryText = queryRequest.text_query || queryRequest.image_query || 'Multimodal query';
+      const historyItem: SearchHistoryItem = {
+        id: response.query_id,
+        query: queryText,
+        timestamp: new Date(),
+        resultsCount: results.length,
+        queryType: queryRequest.text_query ? 'text' : queryRequest.image_query ? 'image' : 'multimodal',
+      };
+
+      dispatch({ type: 'ADD_SEARCH_HISTORY', payload: historyItem });
+    } catch (error) {
+      console.error('Search failed:', error);
+      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Search failed' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, [state.sessionId]);
+
+  const handleRefine = useCallback(async (refinement: string) => {
+    const queryRequest: QueryRequest = {
+      text_query: refinement,
+    };
+    await handleSearch(queryRequest);
+  }, [handleSearch]);
+
+  const handleVideoSelect = useCallback((video: VideoMetadata) => {
+    // This could be extended to track video selections
+    console.log('Video selected:', video);
+  }, []);
+
+  const resetSearch = useCallback(() => {
+    dispatch({ type: 'RESET_SEARCH' });
+  }, []);
+
+  const findVideoById = useCallback((id: string): VideoMetadata | undefined => {
+    return state.searchResults.find(video => video.id === id || video.video_id === id);
+  }, [state.searchResults]);
+
+  const value: SearchContextType = {
+    // State
+    sessionId: state.sessionId,
+    searchResults: state.searchResults,
+    searchHistory: state.searchHistory,
+    queryHistory: state.queryHistory,
+    currentStep: state.currentStep,
+    isLoading: state.isLoading,
+    hasSearched: state.hasSearched,
+    error: state.error,
+
+    // Actions
+    handleSearch,
+    handleRefine,
+    handleVideoSelect,
+    resetSearch,
+    findVideoById,
+    loadHistory,
+    createNewSession,
+  };
+
+  return (
+    <SearchContext.Provider value={value}>
+      {children}
+    </SearchContext.Provider>
+  );
 }
 
-
+export function useSearchContext() {
+  const context = useContext(SearchContext);
+  if (context === undefined) {
+    throw new Error('useSearchContext must be used within a SearchProvider');
+  }
+  return context;
+}
