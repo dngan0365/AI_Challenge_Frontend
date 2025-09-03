@@ -52,7 +52,7 @@ export default function VideoPreviewModal({ video, isOpen, onClose, onSelect }: 
     if (videoRef.current) {
       videoRef.current.pause();
       const timeSeconds = videoRef.current.currentTime;
-      const fps = 30; // Default FPS, adjust if needed
+      const fps = (video as any)?.metadata?.fps || 30;
       const frameIndex = Math.floor(timeSeconds * fps);
       setCurrentTime(timeSeconds);
       setCurrentFrameIndex(frameIndex);

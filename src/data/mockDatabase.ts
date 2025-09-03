@@ -213,6 +213,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L23_V015_F074',
         timestamp: '00:06:03',
+        fps: 30,
         frame_idx: 9075,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L23/keyframes/L23_V015/074.jpg',
         location: 'Ho Chi Minh',
@@ -237,7 +238,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
         channel_url: 'https://www.youtube.com/channel/UC_OBG47Y3PswSHnMWSlrgZA',
         watch_url: 'https://youtube.com/watch?v=6dJAWIYPpYs',
         thumbnail_url: 'https://i.ytimg.com/vi/6dJAWIYPpYs/sddefault.jpg?v=6621f9b0',
-        video_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Videos_L23_a/video/L23_V015.mp4',
+        video_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Videos_L23_a/video/L23_V015.mp4'
       },
       rank: 1,
       score: 23.238
@@ -251,6 +252,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L23_V016_F057',
         timestamp: '00:04:41',
+        fps: 30,
         frame_idx: 7025,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L23/keyframes/L23_V016/057.jpg',
         location: 'TP.HCM',
@@ -289,6 +291,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L30_V028_F024',
         timestamp: '00:01:01',
+        fps: 30,
         frame_idx: 1541,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L30/keyframes/L30_V028/024.jpg',
         location: 'Ho Chi Minh City',
@@ -323,6 +326,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L23_V003_F068',
         timestamp: '00:05:03',
+        fps: 30,
         frame_idx: 7577,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L23/keyframes/L23_V003/068.jpg',
         location: 'Can Tho',
@@ -361,6 +365,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L23_V022_F040',
         timestamp: '00:03:10',
+        fps: 30,
         frame_idx: 4766,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L23/keyframes/L23_V022/040.jpg',
         location: 'Can Tho',
@@ -403,6 +408,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L22_V020_F282',
         timestamp: '00:19:31',
+        fps: 30,
         frame_idx: 35150,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L22/keyframes/L22_V020/282.jpg',
         location: 'Da Nang',
@@ -432,6 +438,7 @@ export function mockSearchKeyframes(queryText: string): MockQueryResult[] {
       metadata: {
         id: 'L30_V001_F004',
         timestamp: '00:00:11',
+        fps: 30,
         frame_idx: 290,
         image_url: 'https://storage.googleapis.com/test-video-retrieval/dataset/unzips/Keyframes_L30/keyframes/L30_V001/004.jpg',
         location: 'Ho Chi Minh City',
