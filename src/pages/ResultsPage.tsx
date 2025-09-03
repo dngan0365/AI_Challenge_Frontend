@@ -21,6 +21,7 @@ export default function ResultsPage() {
         handleRefine,
         handleVideoSelect,
         sessionId,
+        resetSearch,
     } = useSearchContext();
 
     const [previewVideo, setPreviewVideo] = useState<VideoMetadata | null>(null);
@@ -109,7 +110,17 @@ export default function ResultsPage() {
                 {searchHistory.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-1">
-                            <ProgressTracker searchHistory={searchHistory} currentStep={currentStep} />
+                            <ProgressTracker
+                                searchHistory={searchHistory.map((item, index) => ({
+                                    id: index + 1,
+                                    label: `Search ${index + 1}`,
+                                    query: item.query,
+                                    queryType: item.queryType === 'image' ? 'image' : 'text',
+                                    resultsCount: item.resultsCount,
+                                    completed: true,
+                                }))}
+                                currentStep={currentStep}
+                            />
                         </div>
                         <div className="lg:col-span-2">
                             {searchResults.length > 1 && (
@@ -118,15 +129,28 @@ export default function ResultsPage() {
                         </div>
                     </div>
                 )}
-
                 {/* Session Info */}
                 {sessionId && (
-                    <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">
+                    <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg p-3 flex items-center justify-between">
+
+                        {/* Session ID */}
+                        <p className="text-sm text-muted-foreground font-medium">
                             Session ID: {sessionId}
                         </p>
+
+                        {/* Start New Search Button */}
+                        <button
+                            type="button"
+                            onClick={() => { resetSearch(); navigate('/search'); }}
+                            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium"
+                        >
+                            Start new search
+                        </button>
+
                     </div>
                 )}
+
+
 
                 {/* Results Grid */}
                 {searchResults.length > 0 && (
@@ -138,7 +162,7 @@ export default function ResultsPage() {
                                 </h3>
                                 {searchResults[0]?.score && (
                                     <p className="text-sm text-muted-foreground">
-                                        Best match score: {(searchResults[0].score * 100).toFixed(1)}%
+                                        Best match score: {(searchResults[0].score).toFixed(3)}%
                                     </p>
                                 )}
                             </div>
@@ -148,27 +172,30 @@ export default function ResultsPage() {
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {searchResults.map((video, index) => (
-                                <VideoCard
-                                    key={video.id}
-                                    video={video}
-                                    onPreview={onPreview}
-                                    onSelect={searchResults.length > 1 ? onSelect : undefined}
-                                    className={`animate-fade-in`}
-                                    style={{ animationDelay: `${index * 100}ms` }}
-                                />
-                            ))}
+                            {searchResults
+                                .sort((a, b) => (b.score || 0) - (a.score || 0))
+                                .map((video, index) => (
+                                    <VideoCard
+                                        key={video.id}
+                                        video={video}
+                                        onPreview={onPreview}
+                                        onSelect={searchResults.length > 1 ? onSelect : undefined}
+                                        className={`animate-fade-in`}
+                                        style={{ animationDelay: `${index * 100}ms` }}
+                                    />
+                                ))}
                         </div>
 
                         {/* Additional result info */}
                         {searchResults.length > 0 && (
                             <div className="mt-6 text-center">
                                 <p className="text-sm text-muted-foreground">
-                                    Showing {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} 
+                                    Showing {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                                     {searchHistory.length > 0 && ` from ${searchHistory.length} search${searchHistory.length !== 1 ? 'es' : ''}`}
                                 </p>
                                 <button
-                                    onClick={() => navigate('/search')}
+                                    type="button"
+                                    onClick={() => { resetSearch(); navigate('/search'); }}
                                     className="mt-2 text-sm text-primary hover:underline"
                                 >
                                     Start new search

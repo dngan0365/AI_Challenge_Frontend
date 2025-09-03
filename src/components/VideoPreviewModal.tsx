@@ -1,8 +1,9 @@
-import { VideoMetadata } from '@/data/mockDatabase';
+import { VideoMetadata } from '@/context/SearchContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, Clock, Calendar, Tag, FileText, HardDrive } from 'lucide-react';
+import { Play, Clock, Tag, Square } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface VideoPreviewModalProps {
   video: VideoMetadata | null;
@@ -14,120 +15,170 @@ interface VideoPreviewModalProps {
 export default function VideoPreviewModal({ video, isOpen, onClose, onSelect }: VideoPreviewModalProps) {
   if (!video) return null;
 
+  const keyframeSeconds = Math.max(0, Math.floor((video.timestamp_ms || 0) / 1000));
+  const watchUrl = (video as any)?.metadata?.watch_url || '';
+  const videoUrl = (video as any)?.metadata?.video_url || '';
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentFrameIndex, setCurrentFrameIndex] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [autoCaptured, setAutoCaptured] = useState<boolean>(false);
+
+  const onLoadedMetadata = () => {
+    if (videoRef.current) {
+      try {
+        videoRef.current.currentTime = keyframeSeconds;
+        // After seeking completes, auto-capture once
+        const handler = () => {
+          if (!autoCaptured) {
+            handleStopAndGetFrameIndex();
+            setAutoCaptured(true);
+          }
+          videoRef.current?.removeEventListener('seeked', handler);
+        };
+        videoRef.current.addEventListener('seeked', handler);
+      } catch {
+        // no-op
+      }
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+
+  const handleStopAndGetFrameIndex = () => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      const timeSeconds = videoRef.current.currentTime;
+      const fps = 30; // Default FPS, adjust if needed
+      const frameIndex = Math.floor(timeSeconds * fps);
+      setCurrentTime(timeSeconds);
+      setCurrentFrameIndex(frameIndex);
+    }
+  };
+
+  // Reset capture state when opening a new video
+  useEffect(() => {
+    if (isOpen) {
+      setAutoCaptured(false);
+      setCurrentFrameIndex(null);
+      setCurrentTime(0);
+
+      // If we cannot programmatically seek (iframe case), prefill from metadata
+      if (!videoUrl) {
+        setCurrentTime(keyframeSeconds);
+        setCurrentFrameIndex(video.frame_number);
+        setAutoCaptured(true);
+      }
+    }
+  }, [isOpen, videoUrl, keyframeSeconds, video.frame_number]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">{video.title}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
-          {/* Video Player Placeholder */}
+          {/* Video Player */}
           <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-            <img
-              src={video.thumbnail}
-              alt={video.title}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-              <Button size="lg" className="gradient-primary">
-                <Play className="h-6 w-6 mr-2" />
-                Play Preview
-              </Button>
-            </div>
-          </div>
-
-          {/* Video Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column - Basic Info */}
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2">Description</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">
-                  {video.description}
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold mb-3">Tags</h3>
-                <div className="flex flex-wrap gap-2">
-                  {video.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
+            {videoUrl ? (
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                controls
+                className="w-full h-full object-contain bg-black"
+                onLoadedMetadata={onLoadedMetadata}
+                onTimeUpdate={handleTimeUpdate}
+              />
+            ) : watchUrl ? (
+              <iframe
+                className="w-full h-full"
+                src={`${watchUrl.replace('watch?v=', 'embed/').split('&')[0]}?start=${keyframeSeconds}&autoplay=0`}
+                title="Keyframe Player"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <div className="relative w-full h-full bg-muted">
+                <img
+                  src={video.thumbnail}
+                  alt={video.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <Button size="lg" className="gradient-primary" disabled>
+                    <Play className="h-6 w-6 mr-2" />
+                    No preview available
+                  </Button>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Right Column - Metadata */}
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-3">Metadata</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Tag className="h-4 w-4" />
-                      Event ID
-                    </div>
-                    <span className="font-mono">{video.eventId}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      Duration
-                    </div>
-                    <span>{video.duration}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      Upload Date
-                    </div>
-                    <span>{new Date(video.uploadDate).toLocaleDateString()}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <FileText className="h-4 w-4" />
-                      Category
-                    </div>
-                    <Badge variant="outline">{video.category}</Badge>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <HardDrive className="h-4 w-4" />
-                      File Size
-                    </div>
-                    <span>{video.fileSize}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Tag className="h-4 w-4" />
-                      Resolution
-                    </div>
-                    <span>{video.resolution}</span>
-                  </div>
-                </div>
+            <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/70 text-white px-3 py-1 rounded">
+              <Clock className="h-4 w-4" />
+              <span>
+                {Math.floor((video.duration || 0) / 60)}:{String(Math.floor((video.duration || 0) % 60)).padStart(2, '0')}
+              </span>
+            </div>
+            {videoUrl && (
+              <div className="absolute bottom-3 right-3">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleStopAndGetFrameIndex}
+                  className="h-8 px-3"
+                >
+                  <Square className="h-3 w-3 mr-1" />
+                  Stop & Get Frame
+                </Button>
               </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={onClose} className="flex-1">
-              Close
-            </Button>
-            {onSelect && (
-              <Button onClick={() => onSelect(video)} className="flex-1 gradient-primary">
-                Select This Video
-              </Button>
             )}
           </div>
+
+          {currentFrameIndex !== null && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <label className="text-green-700 font-medium">Current Time:</label>
+                  <p className="text-green-600">{currentTime.toFixed(3)} seconds</p>
+                </div>
+                <div>
+                  <label className="text-green-700 font-medium">Frame Index:</label>
+                  <p className="text-green-600 font-mono">{currentFrameIndex}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Video Information */}
+          <div className="flex flex-wrap gap-20 text-sm">
+
+            {/* Video ID */}
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4" />Video ID
+              <span className="font-mono">{video.video_id}</span>
+            </div>
+
+            {/* Frame Index */}
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4" /> Frame index
+              <span>{video.frame_number}</span>
+            </div>
+
+            {/* Score */}
+            {video.score != null && (
+              <div className="flex items-center gap-2">
+                <Tag className="h-4 w-4" /> Score
+                <span>{video.score}</span>
+              </div>
+            )}
+
+          </div>
+
+
         </div>
       </DialogContent>
     </Dialog>

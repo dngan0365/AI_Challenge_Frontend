@@ -1,6 +1,7 @@
 // src/context/SearchContext.tsx
 import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
 import { apiService, QueryRequest, QueryResult, HistoryItem } from '@/services/api';
+import { mockSearchKeyframes } from '@/data/mockDatabase';
 
 // Convert QueryResult to VideoMetadata for compatibility with existing components
 export interface VideoMetadata {
@@ -65,11 +66,11 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'SET_RESULTS':
-      return { 
-        ...state, 
-        searchResults: action.payload, 
+      return {
+        ...state,
+        searchResults: action.payload,
         hasSearched: true,
-        error: null 
+        error: null
       };
     case 'ADD_SEARCH_HISTORY':
       return {
@@ -84,8 +85,8 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
     case 'SET_QUERY_HISTORY':
       return { ...state, queryHistory: action.payload };
     case 'RESET_SEARCH':
-      return { 
-        ...initialState, 
+      return {
+        ...initialState,
         sessionId: state.sessionId // Keep session but reset search state
       };
     default:
@@ -98,7 +99,7 @@ function convertQueryResultToVideoMetadata(result: QueryResult): VideoMetadata {
   const title = result.metadata?.title || `Video ${result.video_id}`;
   const description = result.metadata?.description || '';
   const tags = result.metadata?.tags || [];
-  
+
   return {
     id: result.keyframe_id,
     video_id: result.video_id,
@@ -145,11 +146,19 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initSession = async () => {
       try {
+        const useMock = import.meta.env.VITE_USE_MOCK === 'true';
         // Check for existing session in localStorage
         const existingSessionId = localStorage.getItem('searchSessionId');
         if (existingSessionId) {
           dispatch({ type: 'SET_SESSION', payload: existingSessionId });
-          await loadHistoryForSession(existingSessionId);
+          if (!useMock) {
+            await loadHistoryForSession(existingSessionId);
+          }
+        } else if (useMock) {
+          const mockId = 'mock-session';
+          dispatch({ type: 'SET_SESSION', payload: mockId });
+          localStorage.setItem('searchSessionId', mockId);
+          dispatch({ type: 'RESET_SEARCH' });
         } else {
           await createNewSession();
         }
@@ -163,6 +172,14 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createNewSession = useCallback(async () => {
+    const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+    if (useMock) {
+      const mockId = 'mock-session';
+      dispatch({ type: 'SET_SESSION', payload: mockId });
+      localStorage.setItem('searchSessionId', mockId);
+      dispatch({ type: 'RESET_SEARCH' });
+      return;
+    }
     try {
       const session = await apiService.createSession();
       dispatch({ type: 'SET_SESSION', payload: session.session_id });
@@ -178,7 +195,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     try {
       const history = await apiService.getHistory(sessionId);
       dispatch({ type: 'SET_QUERY_HISTORY', payload: history.queries });
-      
+
       // Convert query history to search history format
       const searchHistory: SearchHistoryItem[] = history.queries.map((query, index) => ({
         id: query.query_id,
@@ -218,15 +235,25 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null });
 
     try {
-      const response = await apiService.createQuery(state.sessionId, queryRequest);
-      const results = response.results.map(convertQueryResultToVideoMetadata);
-      
+      let results: VideoMetadata[] = [];
+
+      // Use mock search when explicitly enabled or API_BASE_URL looks unreachable in dev
+      const useMock = import.meta.env.VITE_USE_MOCK === 'true';
+      const queryText = queryRequest.text_query || queryRequest.image_query || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
+
+      if (useMock) {
+        const mock = mockSearchKeyframes(queryText);
+        results = mock.map(convertQueryResultToVideoMetadata);
+      } else {
+        const response = await apiService.createQuery(state.sessionId, queryRequest);
+        results = response.results.map(convertQueryResultToVideoMetadata);
+      }
+
       dispatch({ type: 'SET_RESULTS', payload: results });
 
       // Add to search history
-      const queryText = queryRequest.text_query || queryRequest.image_query || 'Multimodal query';
       const historyItem: SearchHistoryItem = {
-        id: response.query_id,
+        id: Math.random().toString(36).slice(2),
         query: queryText,
         timestamp: new Date(),
         resultsCount: results.length,

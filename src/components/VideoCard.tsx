@@ -31,7 +31,7 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
   };
 
   return (
-    <div 
+    <div
       className={`group bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg transition-all duration-200 hover:border-primary/50 ${className}`}
       style={style}
     >
@@ -48,10 +48,10 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
             )}`;
           }}
         />
-        
+
         {/* Overlay */}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200" />
-        
+
         {/* Play button */}
         <button
           onClick={(e) => {
@@ -77,7 +77,7 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
         {video.score && (
           <div className="absolute top-2 right-2 bg-primary/90 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
             <Star className="h-3 w-3" />
-            {(video.score * 100).toFixed(0)}%
+            {(video.score).toFixed(3)}%
           </div>
         )}
 
@@ -110,12 +110,12 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Clock className="h-3 w-3" />
             <span>At {formatTimestamp(video.timestamp_ms)}</span>
           </div>
-          
+
           {video.tags && video.tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {video.tags.slice(0, 3).map((tag, index) => (
@@ -144,7 +144,7 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
             <Eye className="h-3 w-3" />
             Preview
           </button>
-          
+
           {onSelect && (
             <button
               onClick={handleCardClick}

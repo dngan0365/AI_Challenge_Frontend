@@ -31,7 +31,7 @@ export default function FinalMatchView({ video, searchHistory, onNewSearch }: Fi
             <h1 className="text-3xl font-bold">Perfect Match Found!</h1>
           </div>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Your search has been successfully narrowed down to this specific video. 
+            Your search has been successfully narrowed down to this specific video.
             All refinement criteria have been satisfied.
           </p>
         </div>
@@ -177,7 +177,7 @@ export default function FinalMatchView({ video, searchHistory, onNewSearch }: Fi
                             "{step.query}"
                           </p>
                           <p className="text-xs text-primary font-medium">
-                            {step.resultsCount} result{step.resultsCount !== 1 ? 's' : ''} → 
+                            {step.resultsCount} result{step.resultsCount !== 1 ? 's' : ''} →
                             {index === searchHistory.length - 1 ? ' Perfect match!' : ` Refined to ${searchHistory[index + 1]?.resultsCount || 0}`}
                           </p>
                         </div>

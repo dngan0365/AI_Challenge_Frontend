@@ -40,15 +40,44 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const queryRequest: QueryRequest = {};
 
-    // Add text query
-    if (textQuery.trim()) {
-      queryRequest.text_query = textQuery.trim();
+    // Build a unified free-text query that merges description + metadata
+    const unifiedParts: string[] = [];
+    if (textQuery.trim()) unifiedParts.push(textQuery.trim());
+    if (ocrText.trim()) unifiedParts.push(ocrText.trim());
+    if (asrText.trim()) unifiedParts.push(asrText.trim());
+
+    // Parse OD JSON to extract object names and include as "objects: a,b,c"
+    if (odJson.trim()) {
+      queryRequest.od_json = odJson.trim();
+      try {
+        const parsed = JSON.parse(odJson.trim());
+        const objectNames: string[] = [];
+        if (Array.isArray(parsed)) {
+          parsed.forEach((o: any) => {
+            if (o && typeof o.name === 'string') objectNames.push(o.name);
+          });
+        } else if (parsed && Array.isArray(parsed.objects)) {
+          parsed.objects.forEach((o: any) => {
+            if (o && typeof o.name === 'string') objectNames.push(o.name);
+          });
+        }
+        if (objectNames.length > 0) {
+          unifiedParts.push(`objects: ${objectNames.join(',')}`);
+        }
+      } catch (err) {
+        console.warn('Invalid OD JSON, skipping object extraction');
+      }
     }
 
-    // Add image query (convert to base64)
+    // Prefer unified text query to leverage metadata-aware mock search
+    if (unifiedParts.length > 0) {
+      queryRequest.text_query = unifiedParts.join(' ');
+    }
+
+    // Optionally add image as separate channel (API may use it; mock will ignore)
     if (imageFile) {
       try {
         const base64Image = await convertImageToBase64(imageFile);
@@ -59,21 +88,8 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
       }
     }
 
-    // Add optional fields
-    if (ocrText.trim()) {
-      queryRequest.ocr_text = ocrText.trim();
-    }
-
-    if (asrText.trim()) {
-      queryRequest.asr_text = asrText.trim();
-    }
-
-    if (odJson.trim()) {
-      queryRequest.od_json = odJson.trim();
-    }
-
     // Ensure at least one query parameter is provided
-    if (!queryRequest.text_query && !queryRequest.image_query && !queryRequest.ocr_text && !queryRequest.asr_text && !queryRequest.od_json) {
+    if (!queryRequest.text_query && !queryRequest.image_query && !ocrText.trim() && !asrText.trim() && !odJson.trim()) {
       alert('Please provide at least one search parameter');
       return;
     }
@@ -85,11 +101,10 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
     <button
       type="button"
       onClick={() => setActiveTab(tab as any)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-        activeTab === tab
-          ? 'bg-primary text-primary-foreground'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80'
-      }`}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === tab
+        ? 'bg-primary text-primary-foreground'
+        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+        }`}
     >
       <Icon className="h-4 w-4" />
       <span className="text-sm font-medium">{label}</span>
@@ -121,7 +136,7 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                     id="text-query"
                     value={textQuery}
                     onChange={(e) => setTextQuery(e.target.value)}
-                    placeholder="e.g., 'a person riding a bicycle in a park' or 'red car on a highway'"
+                    placeholder="e.g., person riding a bicycle in a park; you can also add filters like: location: ho chi minh, objects: person,bicycle"
                     className="w-full pl-10 pr-4 py-3 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     rows={3}
                   />
@@ -185,7 +200,7 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   className="hidden"
                 />
               </div>
-              
+
               {/* Text query option in image tab */}
               <div>
                 <label htmlFor="image-text-query" className="block text-sm font-medium mb-2">
