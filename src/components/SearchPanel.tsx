@@ -1,26 +1,41 @@
 // src/components/SearchPanel.tsx
 import { useState, useRef } from 'react';
-import { Search, Upload, Mic, Image, FileText, Loader2 } from 'lucide-react';
+import { Search, Upload, Mic, Image, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { QueryRequest } from '@/services/api';
 
 interface SearchPanelProps {
   onSearch: (query: QueryRequest) => Promise<void>;
   isLoading: boolean;
+  disabled?: boolean;
 }
 
-export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
+export default function SearchPanel({ onSearch, isLoading, disabled = false }: SearchPanelProps) {
   const [textQuery, setTextQuery] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [ocrText, setOcrText] = useState('');
   const [asrText, setAsrText] = useState('');
   const [odJson, setOdJson] = useState('');
   const [activeTab, setActiveTab] = useState<'text' | 'image' | 'advanced'>('text');
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Validate file size (e.g., max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setError('Image file size must be less than 10MB');
+        return;
+      }
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file');
+        return;
+      }
+      
       setImageFile(file);
+      setError(null);
     }
   };
 
@@ -40,71 +55,79 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (disabled) {
+      setError('Search is currently disabled. Please check API connection.');
+      return;
+    }
 
     const queryRequest: QueryRequest = {};
 
-    // Build a unified free-text query that merges description + metadata
-    const unifiedParts: string[] = [];
-    if (textQuery.trim()) unifiedParts.push(textQuery.trim());
-    if (ocrText.trim()) unifiedParts.push(ocrText.trim());
-    if (asrText.trim()) unifiedParts.push(asrText.trim());
+    // Handle text query
+    if (textQuery.trim()) {
+      queryRequest.text_query = textQuery.trim();
+    }
 
-    // Parse OD JSON to extract object names and include as "objects: a,b,c"
+    // Handle OCR text
+    if (ocrText.trim()) {
+      queryRequest.ocr_text = ocrText.trim();
+    }
+
+    // Handle ASR text
+    if (asrText.trim()) {
+      queryRequest.asr_text = asrText.trim();
+    }
+
+    // Handle object detection JSON
     if (odJson.trim()) {
-      queryRequest.od_json = odJson.trim();
       try {
-        const parsed = JSON.parse(odJson.trim());
-        const objectNames: string[] = [];
-        if (Array.isArray(parsed)) {
-          parsed.forEach((o: any) => {
-            if (o && typeof o.name === 'string') objectNames.push(o.name);
-          });
-        } else if (parsed && Array.isArray(parsed.objects)) {
-          parsed.objects.forEach((o: any) => {
-            if (o && typeof o.name === 'string') objectNames.push(o.name);
-          });
-        }
-        if (objectNames.length > 0) {
-          unifiedParts.push(`objects: ${objectNames.join(',')}`);
-        }
+        // Validate JSON format
+        JSON.parse(odJson.trim());
+        queryRequest.od_json = odJson.trim();
       } catch (err) {
-        console.warn('Invalid OD JSON, skipping object extraction');
+        setError('Invalid JSON format in Object Detection field');
+        return;
       }
     }
 
-    // Prefer unified text query to leverage metadata-aware mock search
-    if (unifiedParts.length > 0) {
-      queryRequest.text_query = unifiedParts.join(' ');
-    }
-
-    // Optionally add image as separate channel (API may use it; mock will ignore)
+    // Handle image upload
     if (imageFile) {
       try {
         const base64Image = await convertImageToBase64(imageFile);
         queryRequest.image_query = base64Image;
       } catch (error) {
         console.error('Failed to convert image:', error);
+        setError('Failed to process image. Please try again.');
         return;
       }
     }
 
     // Ensure at least one query parameter is provided
-    if (!queryRequest.text_query && !queryRequest.image_query && !ocrText.trim() && !asrText.trim() && !odJson.trim()) {
-      alert('Please provide at least one search parameter');
+    if (!queryRequest.text_query && !queryRequest.image_query && !queryRequest.ocr_text && !queryRequest.asr_text && !queryRequest.od_json) {
+      setError('Please provide at least one search parameter');
       return;
     }
 
-    await onSearch(queryRequest);
+    try {
+      await onSearch(queryRequest);
+    } catch (error) {
+      setError('Search failed. Please try again.');
+    }
   };
 
   const TabButton = ({ tab, icon: Icon, label }: { tab: string, icon: any, label: string }) => (
     <button
       type="button"
       onClick={() => setActiveTab(tab as any)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${activeTab === tab
-        ? 'bg-primary text-primary-foreground'
-        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-        }`}
+      disabled={disabled}
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+        disabled 
+          ? 'opacity-50 cursor-not-allowed' 
+          : activeTab === tab
+          ? 'bg-primary text-primary-foreground'
+          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+      }`}
     >
       <Icon className="h-4 w-4" />
       <span className="text-sm font-medium">{label}</span>
@@ -114,6 +137,14 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
   return (
     <div className="w-full max-w-2xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Display */}
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+            <p className="text-sm text-destructive">{error}</p>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className="flex gap-2 p-1 bg-muted/50 rounded-lg">
           <TabButton tab="text" icon={Search} label="Text Search" />
@@ -136,8 +167,11 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                     id="text-query"
                     value={textQuery}
                     onChange={(e) => setTextQuery(e.target.value)}
-                    placeholder="e.g., person riding a bicycle in a park; you can also add filters like: location: ho chi minh, objects: person,bicycle"
-                    className="w-full pl-10 pr-4 py-3 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    disabled={disabled}
+                    placeholder="e.g., person riding a bicycle in a park, cooking in kitchen, sunset over mountains..."
+                    className={`w-full pl-10 pr-4 py-3 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                      disabled ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                     rows={3}
                   />
                 </div>
@@ -152,7 +186,9 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                 <label className="block text-sm font-medium mb-2">
                   Upload an image to search for similar content
                 </label>
-                <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center">
+                <div className={`border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center ${
+                  disabled ? 'opacity-50 cursor-not-allowed' : ''
+                }`}>
                   {imageFile ? (
                     <div className="space-y-2">
                       <div className="flex items-center justify-center">
@@ -171,7 +207,8 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                             fileInputRef.current.value = '';
                           }
                         }}
-                        className="text-sm text-destructive hover:underline"
+                        disabled={disabled}
+                        className="text-sm text-destructive hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Remove
                       </button>
@@ -182,10 +219,14 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                       <p className="text-sm text-muted-foreground mb-2">
                         Click to upload an image or drag and drop
                       </p>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Supported formats: JPG, PNG, GIF (max 10MB)
+                      </p>
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="text-sm text-primary hover:underline"
+                        disabled={disabled}
+                        className="text-sm text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Choose file
                       </button>
@@ -193,10 +234,12 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   )}
                 </div>
                 <input
+                  aria-label="Upload Image"
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handleImageUpload}
+                  disabled={disabled}
                   className="hidden"
                 />
               </div>
@@ -211,8 +254,11 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   type="text"
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
+                  disabled={disabled}
                   placeholder="Describe what you're looking for..."
-                  className="w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className={`w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
             </div>
@@ -230,8 +276,11 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   type="text"
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
+                  disabled={disabled}
                   placeholder="Text description..."
-                  className="w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className={`w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
 
@@ -244,8 +293,11 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   type="text"
                   value={ocrText}
                   onChange={(e) => setOcrText(e.target.value)}
+                  disabled={disabled}
                   placeholder="Text that appears in the video..."
-                  className="w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className={`w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
 
@@ -258,8 +310,11 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   type="text"
                   value={asrText}
                   onChange={(e) => setAsrText(e.target.value)}
+                  disabled={disabled}
                   placeholder="Spoken words or audio content..."
-                  className="w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className={`w-full px-3 py-2 border border-input bg-background rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 />
               </div>
 
@@ -271,10 +326,16 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
                   id="od-json"
                   value={odJson}
                   onChange={(e) => setOdJson(e.target.value)}
+                  disabled={disabled}
                   placeholder='{"objects": [{"name": "person", "confidence": 0.9}, {"name": "car", "confidence": 0.8}]}'
-                  className="w-full px-3 py-2 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className={`w-full px-3 py-2 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    disabled ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                   rows={3}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter valid JSON with object detection results
+                </p>
               </div>
             </div>
           )}
@@ -283,8 +344,10 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading}
-          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+          disabled={isLoading || disabled}
+          className={`w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+            disabled ? 'bg-muted text-muted-foreground' : ''
+          }`}
         >
           {isLoading ? (
             <>
@@ -298,6 +361,13 @@ export default function SearchPanel({ onSearch, isLoading }: SearchPanelProps) {
             </>
           )}
         </button>
+
+        {/* API Status Info */}
+        {disabled && (
+          <div className="text-center text-sm text-muted-foreground">
+            <p>Search is currently unavailable. Please check your API connection.</p>
+          </div>
+        )}
       </form>
     </div>
   );

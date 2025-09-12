@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FinalMatchView from '@/components/FinalMatchView';
-import { useSearchContext } from '@/context/SearchContext';
+import { useSearchContext } from '@/hooks/useSearchContext';
 
 export default function VideoDetailsPage() {
     const navigate = useNavigate();

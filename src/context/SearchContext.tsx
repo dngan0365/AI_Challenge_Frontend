@@ -1,9 +1,8 @@
 // src/context/SearchContext.tsx
 import { createContext, useContext, useReducer, ReactNode, useEffect, useCallback } from 'react';
-import { apiService, QueryRequest, QueryResult, HistoryItem } from '@/services/api';
-import { mockSearchKeyframes } from '@/data/mockDatabase';
+import { apiService, QueryRequest, QueryResponse, SearchResult } from '@/services/api';
 
-// Convert QueryResult to VideoMetadata for compatibility with existing components
+// Convert SearchResult to VideoMetadata for compatibility with existing components
 export interface VideoMetadata {
   id: string;
   video_id: string;
@@ -35,7 +34,7 @@ interface SearchState {
   isLoading: boolean;
   hasSearched: boolean;
   error: string | null;
-  queryHistory: HistoryItem[];
+  queryHistory: any[]; // Using HistoryItem type from api service
 }
 
 type SearchAction =
@@ -45,7 +44,7 @@ type SearchAction =
   | { type: 'ADD_SEARCH_HISTORY'; payload: SearchHistoryItem }
   | { type: 'SET_CURRENT_STEP'; payload: number }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_QUERY_HISTORY'; payload: HistoryItem[] }
+  | { type: 'SET_QUERY_HISTORY'; payload: any[] }
   | { type: 'RESET_SEARCH' };
 
 const initialState: SearchState = {
@@ -94,25 +93,26 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
   }
 }
 
-// Helper function to convert QueryResult to VideoMetadata
-function convertQueryResultToVideoMetadata(result: QueryResult): VideoMetadata {
-  const title = result.metadata?.title || `Video ${result.video_id}`;
-  const description = result.metadata?.description || '';
-  const tags = result.metadata?.tags || [];
+// Helper function to convert SearchResult to VideoMetadata
+function convertSearchResultToVideoMetadata(result: SearchResult): VideoMetadata {
+  // Parse metadata if it's a string
+  const metadata = typeof result.property.metadata === 'string' 
+    ? apiService.parseMetadata(result.property.metadata)
+    : result.property.metadata;
 
   return {
-    id: result.keyframe_id,
-    video_id: result.video_id,
-    title,
-    thumbnail: result.image_url,
-    duration: result.metadata?.duration || 0,
-    timestamp_ms: result.timestamp_ms,
-    frame_number: result.frame_number,
-    description,
-    tags,
-    metadata: result.metadata,
-    score: result.score,
-    rank: result.rank,
+    id: result.frame_id,
+    video_id: result.property.video_id,
+    title: result.property.title,
+    thumbnail: result.property.img_url,
+    duration: metadata?.duration || 0,
+    timestamp_ms: result.property.timestamp * 1000, // Convert to ms if needed
+    frame_number: result.property.frame_idx,
+    description: result.property.text,
+    tags: metadata?.keyword || [],
+    metadata: metadata || {},
+    score: result.distance ? (1 - result.distance) * 100 : undefined, // Convert distance to score
+    rank: undefined, // Could be set based on order
   };
 }
 
@@ -121,7 +121,7 @@ interface SearchContextType {
   sessionId: string | null;
   searchResults: VideoMetadata[];
   searchHistory: SearchHistoryItem[];
-  queryHistory: HistoryItem[];
+  queryHistory: any[];
   currentStep: number;
   isLoading: boolean;
   hasSearched: boolean;
@@ -137,7 +137,7 @@ interface SearchContextType {
   createNewSession: () => Promise<void>;
 }
 
-const SearchContext = createContext<SearchContextType | undefined>(undefined);
+export const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(searchReducer, initialState);
@@ -146,19 +146,12 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initSession = async () => {
       try {
-        const useMock = import.meta.env.VITE_USE_MOCK === 'true';
         // Check for existing session in localStorage
         const existingSessionId = localStorage.getItem('searchSessionId');
-        if (existingSessionId) {
+        if (existingSessionId && /^[0-9a-fA-F-]{36}$/.test(existingSessionId)) {
+          // valid UUID
           dispatch({ type: 'SET_SESSION', payload: existingSessionId });
-          if (!useMock) {
-            await loadHistoryForSession(existingSessionId);
-          }
-        } else if (useMock) {
-          const mockId = 'mock-session';
-          dispatch({ type: 'SET_SESSION', payload: mockId });
-          localStorage.setItem('searchSessionId', mockId);
-          dispatch({ type: 'RESET_SEARCH' });
+          await loadHistoryForSession(existingSessionId);
         } else {
           await createNewSession();
         }
@@ -172,14 +165,6 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createNewSession = useCallback(async () => {
-    const useMock = import.meta.env.VITE_USE_MOCK === 'true';
-    if (useMock) {
-      const mockId = 'mock-session';
-      dispatch({ type: 'SET_SESSION', payload: mockId });
-      localStorage.setItem('searchSessionId', mockId);
-      dispatch({ type: 'RESET_SEARCH' });
-      return;
-    }
     try {
       const session = await apiService.createSession();
       dispatch({ type: 'SET_SESSION', payload: session.session_id });
@@ -199,7 +184,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       // Convert query history to search history format
       const searchHistory: SearchHistoryItem[] = history.queries.map((query, index) => ({
         id: query.query_id,
-        query: query.text_query || query.image_query || 'Multimodal query',
+        query: query.text_query || query.image_query || query.ocr_text || query.asr_text || 'Multimodal query',
         timestamp: new Date(query.query_time),
         resultsCount: query.results.length,
         queryType: query.text_query ? 'text' : query.image_query ? 'image' : 'multimodal',
@@ -212,7 +197,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       // Set results from last query if exists
       if (history.queries.length > 0) {
         const lastQuery = history.queries[history.queries.length - 1];
-        const results = lastQuery.results.map(convertQueryResultToVideoMetadata);
+        const results = lastQuery.results.map(convertSearchResultToVideoMetadata);
         dispatch({ type: 'SET_RESULTS', payload: results });
       }
     } catch (error) {
@@ -235,25 +220,18 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null });
 
     try {
-      let results: VideoMetadata[] = [];
+      const response: QueryResponse = await apiService.createQuery(state.sessionId, queryRequest);
+      const results = response.results.map(convertSearchResultToVideoMetadata);
 
-      // Use mock search when explicitly enabled or API_BASE_URL looks unreachable in dev
-      const useMock = import.meta.env.VITE_USE_MOCK === 'true';
-      const queryText = queryRequest.text_query || queryRequest.image_query || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
-
-      if (useMock) {
-        const mock = mockSearchKeyframes(queryText);
-        results = mock.map(convertQueryResultToVideoMetadata);
-      } else {
-        const response = await apiService.createQuery(state.sessionId, queryRequest);
-        results = response.results.map(convertQueryResultToVideoMetadata);
-      }
+      // Sort results by score (higher is better)
+      results.sort((a, b) => (b.score || 0) - (a.score || 0));
 
       dispatch({ type: 'SET_RESULTS', payload: results });
 
       // Add to search history
+      const queryText = queryRequest.text_query || queryRequest.image_query || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
       const historyItem: SearchHistoryItem = {
-        id: Math.random().toString(36).slice(2),
+        id: response.query_id || Math.random().toString(36).slice(2),
         query: queryText,
         timestamp: new Date(),
         resultsCount: results.length,
@@ -317,10 +295,3 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useSearchContext() {
-  const context = useContext(SearchContext);
-  if (context === undefined) {
-    throw new Error('useSearchContext must be used within a SearchProvider');
-  }
-  return context;
-}

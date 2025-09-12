@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Sparkles, AlertCircle } from 'lucide-react';
-import { useSearchContext } from '@/context/SearchContext';
+import { useSearchContext } from '@/hooks/useSearchContext';
 import ProgressTracker from '@/components/ProgressTracker';
 import RefinementPanel from '@/components/RefinementPanel';
 import VideoCard from '@/components/VideoCard';
@@ -129,10 +129,10 @@ export default function ResultsPage() {
                         </div>
                     </div>
                 )}
+                
                 {/* Session Info */}
                 {sessionId && (
                     <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg p-3 flex items-center justify-between">
-
                         {/* Session ID */}
                         <p className="text-sm text-muted-foreground font-medium">
                             Session ID: {sessionId}
@@ -146,11 +146,8 @@ export default function ResultsPage() {
                         >
                             Start new search
                         </button>
-
                     </div>
                 )}
-
-
 
                 {/* Results Grid */}
                 {searchResults.length > 0 && (
@@ -160,9 +157,9 @@ export default function ResultsPage() {
                                 <h3 className="text-xl font-semibold">
                                     {searchResults.length === 1 ? 'Perfect Match Found!' : 'Search Results'}
                                 </h3>
-                                {searchResults[0]?.score && (
+                                {searchResults[0]?.score !== undefined && (
                                     <p className="text-sm text-muted-foreground">
-                                        Best match score: {(searchResults[0].score).toFixed(3)}%
+                                        Best match score: {searchResults[0].score.toFixed(1)}%
                                     </p>
                                 )}
                             </div>
@@ -180,7 +177,7 @@ export default function ResultsPage() {
                                         video={video}
                                         onPreview={onPreview}
                                         onSelect={searchResults.length > 1 ? onSelect : undefined}
-                                        className={`animate-fade-in`}
+                                        className="animate-fade-in"
                                         style={{ animationDelay: `${index * 100}ms` }}
                                     />
                                 ))}
