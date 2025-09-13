@@ -11,6 +11,7 @@ interface SearchPanelProps {
 
 export default function SearchPanel({ onSearch, isLoading, disabled = false }: SearchPanelProps) {
   const [textQuery, setTextQuery] = useState('');
+  const [imageQuery, setImageQuery] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [ocrText, setOcrText] = useState('');
   const [asrText, setAsrText] = useState('');
@@ -68,6 +69,9 @@ export default function SearchPanel({ onSearch, isLoading, disabled = false }: S
     if (textQuery.trim()) {
       queryRequest.text_query = textQuery.trim();
     }
+    if (imageQuery.trim()) {
+      queryRequest.image_query = imageQuery.trim();
+    }
 
     // Handle OCR text
     if (ocrText.trim()) {
@@ -95,7 +99,7 @@ export default function SearchPanel({ onSearch, isLoading, disabled = false }: S
     if (imageFile) {
       try {
         const base64Image = await convertImageToBase64(imageFile);
-        queryRequest.image_query = base64Image;
+        queryRequest.image = base64Image;
       } catch (error) {
         console.error('Failed to convert image:', error);
         setError('Failed to process image. Please try again.');
@@ -104,7 +108,7 @@ export default function SearchPanel({ onSearch, isLoading, disabled = false }: S
     }
 
     // Ensure at least one query parameter is provided
-    if (!queryRequest.text_query && !queryRequest.image_query && !queryRequest.ocr_text && !queryRequest.asr_text && !queryRequest.od_json) {
+    if (!queryRequest.text_query && !queryRequest.image_query && !queryRequest.image && !queryRequest.ocr_text && !queryRequest.asr_text && !queryRequest.od_json) {
       setError('Please provide at least one search parameter');
       return;
     }
@@ -159,7 +163,7 @@ export default function SearchPanel({ onSearch, isLoading, disabled = false }: S
             <div className="space-y-4">
               <div>
                 <label htmlFor="text-query" className="block text-sm font-medium mb-2">
-                  Describe what you're looking for
+                  Describe what you're looking for by ocr, asr (audio transcription, music), objects:
                 </label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
@@ -168,8 +172,25 @@ export default function SearchPanel({ onSearch, isLoading, disabled = false }: S
                     value={textQuery}
                     onChange={(e) => setTextQuery(e.target.value)}
                     disabled={disabled}
-                    placeholder="e.g., person riding a bicycle in a park, cooking in kitchen, sunset over mountains..."
-                    className={`w-full pl-10 pr-4 py-3 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                    placeholder="e.g., Cuộc đua, lễ hội múa lân..."
+                    className={`w-full pl-10 pr-2 py-2 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                      disabled ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                    rows={3}
+                  />
+                </div>
+                <label htmlFor="text-query" className="block text-sm font-medium mb-2">
+                  Describe image (keyframe):
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <textarea
+                    id="image-query"
+                    value={imageQuery}
+                    onChange={(e) => setImageQuery(e.target.value)}
+                    disabled={disabled}
+                    placeholder="e.g., person are in black clothing..."
+                    className={`w-full pl-10 pr-2 py-2 border border-input bg-background rounded-lg resize-none focus:ring-2 focus:ring-primary focus:border-transparent ${
                       disabled ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                     rows={3}

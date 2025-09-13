@@ -229,7 +229,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_RESULTS', payload: results });
 
       // Add to search history
-      const queryText = queryRequest.text_query || queryRequest.image_query || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
+      const queryText = queryRequest.text_query || queryRequest.image_query ||  queryRequest.image || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
       const historyItem: SearchHistoryItem = {
         id: response.query_id || Math.random().toString(36).slice(2),
         query: queryText,

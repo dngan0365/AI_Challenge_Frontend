@@ -21,6 +21,12 @@ interface FinalMatchViewProps {
 }
 
 export default function FinalMatchView({ video, searchHistory, onNewSearch }: FinalMatchViewProps) {
+  const [frameIndex, setFrameIndex] = useState<string>('');
+  const [isAddedToCSV, setIsAddedToCSV] = useState(false);
+  const csvManagerRef = useRef<any>();
+
+  
+
   return (
     <div className="min-h-screen bg-gradient-hero p-6">
       <div className="max-w-7xl mx-auto">

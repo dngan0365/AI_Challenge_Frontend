@@ -5,7 +5,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 // Enhanced Types matching your backend models
 export interface QueryRequest {
   text_query?: string;
-  image_query?: string;
+  image_query?: string; // Text
+  image?: string; // base64 encoded image
   od_json?: string;
   ocr_text?: string;
   asr_text?: string;
