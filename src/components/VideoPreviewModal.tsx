@@ -13,6 +13,7 @@ interface VideoPreviewModalProps {
 
 export default function VideoPreviewModal({ video, isOpen, onClose }: VideoPreviewModalProps) {
   if (!video) return null;
+  console.log('Video in Modal:', video);
 
   const keyframeSeconds = Math.max(0, Math.floor((video.timestamp_ms || 0) / 1000));
   const watchUrl = (video as any)?.metadata?.watch_url || '';
@@ -74,140 +75,165 @@ export default function VideoPreviewModal({ video, isOpen, onClose }: VideoPrevi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">{video.title}</DialogTitle>
+      <DialogContent className="w-[98vw] max-w-[98vw] sm:w-[95vw] sm:max-w-[95vw] md:max-w-4xl lg:max-w-5xl xl:max-w-5xl h-[98vh] max-h-[98vh] sm:h-[95vh] sm:max-h-[95vh] overflow-hidden flex flex-col p-2 sm:p-4 md:p-6">
+        <DialogHeader className="flex-shrink-0 pb-2 sm:pb-4">
+          <DialogTitle className="text-sm sm:text-base md:text-lg lg:text-xl font-bold pr-6 sm:pr-8 line-clamp-2 break-words">
+            {video.title}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-6 pr-2">
           {/* ===================== Video Player ===================== */}
-          <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-            {videoUrl ? (
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                controls
-                className="w-full h-full object-contain bg-black"
-                onLoadedMetadata={onLoadedMetadata}
-                onTimeUpdate={handleTimeUpdate}
-              />
-            ) : watchUrl ? (
-              <iframe
-                className="w-full h-full"
-                src={`${watchUrl.replace('watch?v=', 'embed/').split('&')[0]}?start=${keyframeSeconds}&autoplay=0`}
-                title="Keyframe Player"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            ) : (
-              <div className="relative w-full h-full bg-muted">
-                <img
-                  src={video.thumbnail}
-                  alt={video.title}
-                  className="w-full h-full object-cover"
+          <div className="w-full">
+            <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-lg">
+              {videoUrl ? (
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  controls
+                  className="w-full h-full object-contain bg-black"
+                  onLoadedMetadata={onLoadedMetadata}
+                  onTimeUpdate={handleTimeUpdate}
                 />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <Button size="lg" className="gradient-primary" disabled>
-                    <Play className="h-6 w-6 mr-2" />
-                    No preview available
-                  </Button>
+              ) : watchUrl ? (
+                <iframe
+                  className="w-full h-full"
+                  src={`${watchUrl.replace('watch?v=', 'embed/').split('&')[0]}?start=${keyframeSeconds}&autoplay=0`}
+                  title="Keyframe Player"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              ) : (
+                <div className="relative w-full h-full bg-muted">
+                  <img
+                    src={video.thumbnail}
+                    alt={video.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Button size="sm" className="gradient-primary" disabled>
+                      <Play className="h-3 w-3 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1 sm:mr-2" />
+                      <span className="text-xs sm:text-sm">No preview available</span>
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Duration Overlay */}
-            <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-black/70 text-white px-3 py-1 rounded">
-              <Clock className="h-4 w-4" />
-              <span>
-                {Math.floor((video.duration || 0) / 60)}:
-                {String(Math.floor((video.duration || 0) % 60)).padStart(2, '0')}
-              </span>
+              )}
             </div>
           </div>
 
           {/* Stop & Get Frame */}
           {videoUrl && (
-            <div className="flex justify-end">
+            <div className="flex justify-center sm:justify-end">
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={handleStopAndGetFrameIndex}
-                className="h-8 px-3"
+                className="h-7 sm:h-8 md:h-9 px-2 sm:px-3 md:px-4 text-xs sm:text-sm"
               >
-                <Square className="h-3 w-3 mr-1" />
-                Stop & Get Frame
+                <Square className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Stop & Get Frame</span>
+                <span className="sm:hidden">Stop</span>
               </Button>
             </div>
           )}
 
           {/* Captured Frame Info */}
           {currentFrameIndex !== null && (
-            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="p-2 sm:p-3 md:p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4 text-xs sm:text-sm">
                 <div>
-                  <label className="text-green-700 font-medium">Current Time:</label>
-                  <p className="text-green-600">{currentTime.toFixed(3)} seconds</p>
+                  <label className="text-green-700 font-medium block">Current Time:</label>
+                  <p className="text-green-600 break-all">{currentTime.toFixed(3)} seconds</p>
                 </div>
                 <div>
-                  <label className="text-green-700 font-medium">Frame Index:</label>
-                  <p className="text-green-600 font-mono">{currentFrameIndex}</p>
+                  <label className="text-green-700 font-medium block">Frame Index:</label>
+                  <p className="text-green-600 font-mono break-all">{currentFrameIndex}</p>
                 </div>
               </div>
             </div>
           )}
 
           {/* ===================== Video Info ===================== */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Tag className="h-4 w-4" /> Video ID: <span className="font-mono">{video.video_id}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0 col-span-1 sm:col-span-2 lg:col-span-1">
+              <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+              <span className="flex-shrink-0">Video ID:</span>
+              <span className="font-mono truncate text-xs break-all">{video.video_id}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Tag className="h-4 w-4" /> Frame Number: <span>{video.frame_number}</span>
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+              <span className="flex-shrink-0">Frame:</span>
+              <span className="truncate">{video.frame_number}</span>
             </div>
-            {video.score != null && (
-              <div className="flex items-center gap-2">
-                <Tag className="h-4 w-4" /> Score: <span>{video.score}</span>
-              </div>
-            )}
             {video.rank != null && (
-              <div className="flex items-center gap-2">
-                <Tag className="h-4 w-4" /> Rank: <span>{video.rank}</span>
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                <span className="flex-shrink-0">Rank:</span>
+                <span className="truncate">{video.rank}</span>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <Tag className="h-4 w-4" /> FPS: <span>{fps}</span>
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+              <span className="flex-shrink-0">FPS:</span>
+              <span className="truncate">{fps}</span>
             </div>
+            {Number.isFinite(video.total_score) && (
+              <div className="flex items-center gap-1 sm:gap-2 bg-yellow-100 text-yellow-800 px-2 sm:px-3 py-1 rounded-full font-semibold shadow-sm col-span-1 sm:col-span-2 lg:col-span-2 xl:col-span-2 min-w-0">
+                <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                <span className="truncate">Total Score: {video.total_score.toFixed(3)}</span>
+              </div>
+            )}
+            {Number.isFinite(video.image_score) && (
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                <span className="flex-shrink-0">Image Score:</span>
+                <span className="truncate">{video.image_score.toFixed(3)}</span>
+              </div>
+            )}
+            {Number.isFinite(video.text_score) && (
+              <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+                <Tag className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" /> 
+                <span className="flex-shrink-0">Text Score:</span>
+                <span className="truncate">{video.text_score.toFixed(3)}</span>
+              </div>
+            )}
           </div>
 
           {/* ===================== Tags ===================== */}
           {video.tags && video.tags.length > 0 && (
             <div>
-              <h4 className="font-semibold mb-2">Tags:</h4>
-              <div className="flex flex-wrap gap-2">
+              <h4 className="font-semibold mb-2 text-sm sm:text-base">Tags:</h4>
+              <div className="flex flex-wrap gap-1 sm:gap-2">
                 {video.tags.map((tag, idx) => (
-                  <Badge key={idx} variant="secondary">{tag}</Badge>
+                  <Badge key={idx} variant="secondary" className="text-xs sm:text-sm break-all">
+                    {tag}
+                  </Badge>
                 ))}
               </div>
             </div>
           )}
-          
+
           {/* ===================== Description ===================== */}
           {video.description && (
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h4 className="font-semibold text-gray-800 mb-2">Description</h4>
-              <p className="text-gray-700 whitespace-pre-line">{video.description}</p>
+            <div className="p-2 sm:p-3 md:p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="font-semibold text-gray-800 mb-2 text-sm sm:text-base">Description</h4>
+              <p className="text-gray-700 whitespace-pre-line text-xs sm:text-sm leading-relaxed break-words">
+                {video.description}
+              </p>
             </div>
           )}
 
           {/* ===================== Metadata ===================== */}
           {video.metadata && Object.keys(video.metadata).length > 0 && (
             <div>
-              <h4 className="font-semibold mb-2 flex items-center gap-2">
-                <Info className="h-4 w-4" /> Metadata
+              <h4 className="font-semibold mb-2 flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
+                <Info className="h-3 w-3 sm:h-4 sm:w-4" /> Metadata
               </h4>
-              <pre className="p-3 bg-gray-100 rounded-lg overflow-x-auto text-xs border border-gray-200">
-                {JSON.stringify(video.metadata, null, 2)}
-              </pre>
+              <div className="relative">
+                <pre className="p-2 sm:p-3 bg-gray-100 rounded-lg overflow-x-auto text-xs sm:text-sm border border-gray-200 max-h-24 sm:max-h-32 md:max-h-48 lg:max-h-64 overflow-y-auto whitespace-pre-wrap break-all">
+                  {JSON.stringify(video.metadata, null, 2)}
+                </pre>
+              </div>
             </div>
           )}
         </div>

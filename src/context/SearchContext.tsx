@@ -14,7 +14,9 @@ export interface VideoMetadata {
   description?: string;
   tags?: string[];
   metadata: Record<string, any>;
-  score?: number;
+  total_score?: number;
+  image_score?: number;
+  text_score?: number;
   rank?: number;
 }
 
@@ -93,10 +95,12 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
   }
 }
 
+function safeScore(score: number | null): number | undefined {
+  return Number.isFinite(score) ? score! * 100 : undefined;
+}
 // Helper function to convert SearchResult to VideoMetadata
 function convertSearchResultToVideoMetadata(result: SearchResult): VideoMetadata {
-  // Parse metadata if it's a string
-  const metadata = typeof result.property.metadata === 'string' 
+  const metadata = typeof result.property.metadata === 'string'
     ? apiService.parseMetadata(result.property.metadata)
     : result.property.metadata;
 
@@ -106,13 +110,15 @@ function convertSearchResultToVideoMetadata(result: SearchResult): VideoMetadata
     title: result.property.title,
     thumbnail: result.property.img_url,
     duration: metadata?.duration || 0,
-    timestamp_ms: result.property.timestamp * 1000, // Convert to ms if needed
+    timestamp_ms: result.property.timestamp * 1000,
     frame_number: result.property.frame_idx,
     description: result.property.text,
     tags: metadata?.keyword || [],
     metadata: metadata || {},
-    score: result.distance ? (1 - result.distance) * 100 : undefined, // Convert distance to score
-    rank: undefined, // Could be set based on order
+    total_score: safeScore(result.total_score),
+    image_score: safeScore(result.image_score),
+    text_score: safeScore(result.text_score),
+    rank: undefined,
   };
 }
 
@@ -223,13 +229,10 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       const response: QueryResponse = await apiService.createQuery(state.sessionId, queryRequest);
       const results = response.results.map(convertSearchResultToVideoMetadata);
 
-      // Sort results by score (higher is better)
-      results.sort((a, b) => (b.score || 0) - (a.score || 0));
-
       dispatch({ type: 'SET_RESULTS', payload: results });
 
       // Add to search history
-      const queryText = queryRequest.text_query || queryRequest.image_query ||  queryRequest.image || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
+      const queryText = queryRequest.text_query || queryRequest.image_query || queryRequest.ocr_text || queryRequest.asr_text || queryRequest.od_json || '';
       const historyItem: SearchHistoryItem = {
         id: response.query_id || Math.random().toString(36).slice(2),
         query: queryText,

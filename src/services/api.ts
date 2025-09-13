@@ -59,8 +59,9 @@ export interface SearchResult {
     metadata: string | VideoMetadata;
     timestamp: number;
   };
-  distance: number | null;
-  source: 'image' | 'text';
+  total_score: number | null;
+  text_score: number | null;
+  image_score: number | null;
 }
 
 export interface QueryResponse {

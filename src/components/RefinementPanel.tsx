@@ -121,6 +121,13 @@ export default function RefinementPanel({ onRefine, resultsCount }: RefinementPa
                 onKeyPress={(e) => e.key === 'Enter' && handleRefine()}
                 className="flex-1"
               />
+              <Input
+                placeholder="Enter additional search terms..."
+                value={refinementQuery}
+                onChange={(e) => setRefinementQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleRefine()}
+                className="flex-1"
+              />
             </div>
           )}
 

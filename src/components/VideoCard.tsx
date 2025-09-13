@@ -74,10 +74,10 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
         )}
 
         {/* Score badge */}
-        {video.score && (
+        {video.total_score && (
           <div className="absolute top-2 right-2 bg-primary/90 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
             <Star className="h-3 w-3" />
-            {(video.score).toFixed(3)}%
+            {(video.total_score).toFixed(2)}
           </div>
         )}
 
@@ -94,7 +94,7 @@ export default function VideoCard({ video, onPreview, onSelect, className = '', 
             {video.title}
           </h3>
           {video.description && (
-            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+            <p className="text-xs text-muted-foreground line-clamp-4 mt-1">
               {video.description}
             </p>
           )}

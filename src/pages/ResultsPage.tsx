@@ -8,6 +8,7 @@ import VideoCard from '@/components/VideoCard';
 import VideoPreviewModal from '@/components/VideoPreviewModal';
 import { VideoMetadata } from '@/context/SearchContext';
 import AppHeader from '@/components/layout/AppHeader';
+import { saveAs } from 'file-saver'; 
 
 export default function ResultsPage() {
     const navigate = useNavigate();
@@ -51,6 +52,23 @@ export default function ResultsPage() {
     const handleRefineSearch = useCallback(async (refinement: string) => {
         await handleRefine(refinement);
     }, [handleRefine]);
+
+    const handleExportCSV = useCallback(() => {
+        if (!searchResults || searchResults.length === 0) return;
+
+        const headers = ['id', 'frame_number'];
+        const rows = searchResults.slice(0, 100).map((video) => [
+            video.id.slice(0, -5),
+            video.frame_number
+        ]);
+
+        const csvContent = [headers, ...rows]
+            .map((row) => row.join(','))
+            .join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        saveAs(blob, 'top_results.csv');
+    }, [searchResults]);
 
     // Show loading state
     if (isLoading) {
@@ -98,12 +116,24 @@ export default function ResultsPage() {
 
     return (
         <div className="min-h-screen bg-gradient-hero">
-            <AppHeader rightSlot={<>
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">
-                    {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
-                </span>
-            </>} />
+            <AppHeader
+                rightSlot={
+                    <>
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        <span className="text-sm text-muted-foreground">
+                            {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
+                        </span>
+                        {searchResults.length > 0 && (
+                            <button
+                                onClick={handleExportCSV}
+                                className="ml-4 bg-primary text-primary-foreground px-3 py-1 rounded-lg hover:bg-primary/90 transition-colors text-sm"
+                            >
+                                Export CSV
+                            </button>
+                        )}
+                    </>
+                }
+            />
 
             <div className="max-w-7xl mx-auto p-6 space-y-6">
                 {/* Search History & Progress */}
@@ -168,9 +198,8 @@ export default function ResultsPage() {
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {searchResults
-                                .sort((a, b) => (b.score || 0) - (a.score || 0))
                                 .map((video, index) => (
                                     <VideoCard
                                         key={video.id}
